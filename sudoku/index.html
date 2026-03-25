@@ -105,8 +105,10 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .overlay-sub{font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;}
 @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
 @keyframes hint-flash{0%,100%{filter:brightness(1)}50%{filter:brightness(1.6)}}
+@keyframes digit-complete{0%{transform:scale(1);filter:brightness(1)}30%{transform:scale(1.08);filter:brightness(1.8)}70%{transform:scale(1.04);filter:brightness(1.4)}100%{transform:scale(1);filter:brightness(1)}}
 .anim-shake{animation:shake 0.35s ease-in-out;}
 .anim-hint{animation:hint-flash 0.45s ease-in-out;}
+.anim-complete{animation:digit-complete 0.5s ease-in-out;}
 </style>
 </head>
 <body>
@@ -191,10 +193,11 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 <!-- Color palette strip -->
 <div id="color-strip" style="display:none;position:fixed;z-index:500;background:#2c2820;border:1px solid #3a3530;border-radius:8px;padding:6px;box-shadow:0 4px 16px rgba(0,0,0,0.5);">
   <div id="cs-swatches" style="display:flex;flex-wrap:wrap;gap:4px;width:108px;margin-bottom:4px;"></div>
-  <label style="display:block;position:relative;width:100%;height:22px;border-radius:4px;overflow:hidden;cursor:pointer;">
+  <label style="display:block;position:relative;width:100%;height:22px;border-radius:4px;overflow:hidden;cursor:pointer;margin-bottom:4px;">
     <input type="color" id="cs-custom" value="#ff6b6b" style="position:absolute;width:140%;height:140%;top:-20%;left:-20%;border:none;cursor:pointer;opacity:0;">
     <div id="cs-custom-preview" style="width:100%;height:100%;border-radius:4px;border:1px solid #3a3530;display:flex;align-items:center;justify-content:center;font-size:9px;color:#6a5a48;font-family:'Noto Sans SC',sans-serif;background:#ff6b6b;">自定义</div>
   </label>
+  <button onclick="clearAllNoteColors()" style="width:100%;height:22px;border-radius:4px;border:1px solid #3a3530;background:#2c2820;color:#a09080;font-size:10px;font-family:'Noto Sans SC',sans-serif;cursor:pointer;" onmouseover="this.style.color='#ff6b6b';this.style.borderColor='#ff6b6b'" onmouseout="this.style.color='#a09080';this.style.borderColor='#3a3530'">清除所有颜色标记</button>
 </div>
 
 <div class="overlay" id="win-overlay">
@@ -339,21 +342,13 @@ function calcScore(secs,errors,hints,diff,mode){
 }
 
 function ratePuzzle(puz){
-  // Sudoku Explainer style: rating = hardest technique required
-  // SE difficulty scale (subset we implement):
-  //   1.5 hidden single (row/col)   2.3 naked single
-  //   2.6 pointing (locked)         2.8 claiming (locked row/col->box)
-  //   3.0 naked pair                3.2 x-wing
-  //   3.4 hidden pair               3.6 naked triple
-  //   3.8 swordfish                 4.0 hidden triple
-  //   4.2 xy-wing                   4.3 w-wing / skyscraper
-  //   4.4 xyz-wing                  4.5 unique rectangle
+  // SE-style: simulate solve step by step, track hardest technique used
   const board=puz.map(r=>[...r]);
   const cands=Array.from({length:9},(_,r)=>Array.from({length:9},(_,c)=>{
     if(board[r][c]!==0)return new Set();
-    const used=new Set();for(let i=0;i<9;i++){if(board[r][i])used.add(board[r][i]);if(board[i][c])used.add(board[i][c]);}
-    const br=~~(r/3)*3,bc=~~(c/3)*3;for(let dr=0;dr<3;dr++)for(let dc=0;dc<3;dc++)if(board[br+dr][bc+dc])used.add(board[br+dr][bc+dc]);
-    const s=new Set();for(let n=1;n<=9;n++)if(!used.has(n))s.add(n);return s;
+    const u=new Set();for(let i=0;i<9;i++){if(board[r][i])u.add(board[r][i]);if(board[i][c])u.add(board[i][c]);}
+    const br=~~(r/3)*3,bc=~~(c/3)*3;for(let dr=0;dr<3;dr++)for(let dc=0;dc<3;dc++)if(board[br+dr][bc+dc])u.add(board[br+dr][bc+dc]);
+    const s=new Set();for(let n=1;n<=9;n++)if(!u.has(n))s.add(n);return s;
   }));
   function pl(r,c,n){board[r][c]=n;cands[r][c]=new Set();for(let i=0;i<9;i++){cands[r][i].delete(n);cands[i][c].delete(n);}const br=~~(r/3)*3,bc=~~(c/3)*3;for(let dr=0;dr<3;dr++)for(let dc=0;dc<3;dc++)cands[br+dr][bc+dc].delete(n);}
   const rows2=[],cols2=[],boxes2=[];
@@ -361,17 +356,17 @@ function ratePuzzle(puz){
   const units2=[...rows2,...cols2,...boxes2];
   function sv(r1,c1,r2,c2){return r1===r2||c1===c2||(~~(r1/3)===~~(r2/3)&&~~(c1/3)===~~(c2/3));}
   let maxSE=0;
-  function mark(se){if(se>maxSE)maxSE=se;}
-  function locked2(){let f=false;for(const box of boxes2){for(let n=1;n<=9;n++){if(box.some(([r,c])=>board[r][c]===n))continue;const pl2=box.filter(([r,c])=>board[r][c]===0&&cands[r][c].has(n));if(pl2.length<2)continue;const rs=new Set(pl2.map(([r])=>r)),cs2=new Set(pl2.map(([,c])=>c));const bc2=~~(pl2[0][1]/3)*3,br2=~~(pl2[0][0]/3)*3;if(rs.size===1){const row=[...rs][0];for(let c=0;c<9;c++){if(~~(c/3)===~~(bc2/3))continue;if(board[row][c]===0&&cands[row][c].has(n)){cands[row][c].delete(n);f=true;}}}if(cs2.size===1){const col=[...cs2][0];for(let r=0;r<9;r++){if(~~(r/3)===~~(br2/3))continue;if(board[r][col]===0&&cands[r][col].has(n)){cands[r][col].delete(n);f=true;}}}}}for(let row=0;row<9;row++){for(let n=1;n<=9;n++){const ps=[];for(let c=0;c<9;c++)if(board[row][c]===0&&cands[row][c].has(n))ps.push([row,c]);if(ps.length<2)continue;const bcs=new Set(ps.map(([,c])=>~~(c/3)));if(bcs.size===1){const bc2=[...bcs][0],br2=~~(row/3);for(let dr=0;dr<3;dr++)for(let dc=0;dc<3;dc++){const r=br2*3+dr,c=bc2*3+dc;if(r===row)continue;if(board[r][c]===0&&cands[r][c].has(n)){cands[r][c].delete(n);f=true;}}}}}for(let col=0;col<9;col++){for(let n=1;n<=9;n++){const ps=[];for(let r=0;r<9;r++)if(board[r][col]===0&&cands[r][col].has(n))ps.push([r,col]);if(ps.length<2)continue;const brs=new Set(ps.map(([r])=>~~(r/3)));if(brs.size===1){const br2=[...brs][0],bc2=~~(col/3);for(let dr=0;dr<3;dr++)for(let dc=0;dc<3;dc++){const r=br2*3+dr,c=bc2*3+dc;if(c===col)continue;if(board[r][c]===0&&cands[r][c].has(n)){cands[r][c].delete(n);f=true;}}}}}if(f)mark(2.8);return f;}
-  function nakedSubset2(sz,se){let f=false;for(const unit of units2){const em=unit.filter(([r,c])=>board[r][c]===0&&cands[r][c].size>0&&cands[r][c].size<=sz);function cb(s2,ch){if(ch.length===sz){const u=new Set();ch.forEach(([r,c])=>cands[r][c].forEach(n=>u.add(n)));if(u.size!==sz)return;for(const[r,c]of unit){if(ch.some(([r2,c2])=>r2===r&&c2===c)||board[r][c]!==0)continue;const b4=cands[r][c].size;u.forEach(n=>cands[r][c].delete(n));if(cands[r][c].size<b4)f=true;}return;}for(let i=s2;i<em.length;i++)cb(i+1,[...ch,em[i]]);}cb(0,[]);}if(f)mark(se);return f;}
-  function hiddenSubset2(sz,se){let f=false;for(const unit of units2){const em=unit.filter(([r,c])=>board[r][c]===0);const dc={};for(let n=1;n<=9;n++){if(unit.some(([r,c])=>board[r][c]===n))continue;const cs=em.filter(([r,c])=>cands[r][c].has(n));if(cs.length>=2&&cs.length<=sz)dc[n]=cs;}const digs=Object.keys(dc).map(Number);function cb(s2,ch){if(ch.length===sz){const cm=new Map();ch.forEach(n=>dc[n].forEach(([r,c])=>{const k=r+","+c;if(!cm.has(k))cm.set(k,[r,c]);}));if(cm.size!==sz)return;cm.forEach(([r,c])=>{const b4=cands[r][c].size;for(let n=1;n<=9;n++)if(!ch.includes(n))cands[r][c].delete(n);if(cands[r][c].size<b4)f=true;});return;}for(let i=s2;i<digs.length;i++)cb(i+1,[...ch,digs[i]]);}cb(0,[]);}if(f)mark(se);return f;}
+  function mark(v){if(v>maxSE)maxSE=v;}
+  function locked2(){let f=false;for(const box of boxes2){for(let n=1;n<=9;n++){if(box.some(([r,c])=>board[r][c]===n))continue;const pp=box.filter(([r,c])=>board[r][c]===0&&cands[r][c].has(n));if(pp.length<2)continue;const rs=new Set(pp.map(([r])=>r)),cs2=new Set(pp.map(([,c])=>c));const br2=~~(pp[0][0]/3)*3,bc2=~~(pp[0][1]/3)*3;if(rs.size===1){const row=[...rs][0];for(let c=0;c<9;c++){if(~~(c/3)===~~(bc2/3))continue;if(board[row][c]===0&&cands[row][c].has(n)){cands[row][c].delete(n);f=true;}}}if(cs2.size===1){const col=[...cs2][0];for(let r=0;r<9;r++){if(~~(r/3)===~~(br2/3))continue;if(board[r][col]===0&&cands[r][col].has(n)){cands[r][col].delete(n);f=true;}}}}}for(let row=0;row<9;row++){for(let n=1;n<=9;n++){const pp=[];for(let c=0;c<9;c++)if(board[row][c]===0&&cands[row][c].has(n))pp.push([row,c]);if(pp.length<2)continue;const bcs=new Set(pp.map(([,c])=>~~(c/3)));if(bcs.size===1){const bc2=[...bcs][0],br2=~~(row/3);for(let dr=0;dr<3;dr++)for(let dc=0;dc<3;dc++){const r=br2*3+dr,c=bc2*3+dc;if(r===row)continue;if(board[r][c]===0&&cands[r][c].has(n)){cands[r][c].delete(n);f=true;}}}}}for(let col=0;col<9;col++){for(let n=1;n<=9;n++){const pp=[];for(let r=0;r<9;r++)if(board[r][col]===0&&cands[r][col].has(n))pp.push([r,col]);if(pp.length<2)continue;const brs=new Set(pp.map(([r])=>~~(r/3)));if(brs.size===1){const br2=[...brs][0],bc2=~~(col/3);for(let dr=0;dr<3;dr++)for(let dc=0;dc<3;dc++){const r=br2*3+dr,c=bc2*3+dc;if(c===col)continue;if(board[r][c]===0&&cands[r][c].has(n)){cands[r][c].delete(n);f=true;}}}}}if(f)mark(2.8);return f;}
+  function nakedS(sz,se){let f=false;for(const unit of units2){const em=unit.filter(([r,c])=>board[r][c]===0&&cands[r][c].size>0&&cands[r][c].size<=sz);function cb(s2,ch){if(ch.length===sz){const u=new Set();ch.forEach(([r,c])=>cands[r][c].forEach(n=>u.add(n)));if(u.size!==sz)return;for(const[r,c]of unit){if(ch.some(([r2,c2])=>r2===r&&c2===c)||board[r][c]!==0)continue;const b4=cands[r][c].size;u.forEach(n=>cands[r][c].delete(n));if(cands[r][c].size<b4)f=true;}return;}for(let i=s2;i<em.length;i++)cb(i+1,[...ch,em[i]]);}cb(0,[]);}if(f)mark(se);return f;}
+  function hiddenS(sz,se){let f=false;for(const unit of units2){const em=unit.filter(([r,c])=>board[r][c]===0);const dc={};for(let n=1;n<=9;n++){if(unit.some(([r,c])=>board[r][c]===n))continue;const cs=em.filter(([r,c])=>cands[r][c].has(n));if(cs.length>=2&&cs.length<=sz)dc[n]=cs;}const digs=Object.keys(dc).map(Number);function cb(s2,ch){if(ch.length===sz){const cm=new Map();ch.forEach(n=>dc[n].forEach(([r,c])=>{const k=r+','+c;if(!cm.has(k))cm.set(k,[r,c]);}));if(cm.size!==sz)return;cm.forEach(([r,c])=>{const b4=cands[r][c].size;for(let n=1;n<=9;n++)if(!ch.includes(n))cands[r][c].delete(n);if(cands[r][c].size<b4)f=true;});return;}for(let i=s2;i<digs.length;i++)cb(i+1,[...ch,digs[i]]);}cb(0,[]);}if(f)mark(se);return f;}
   function xwing2(){let f=false;for(let n=1;n<=9;n++){const rd=[];for(let r=0;r<9;r++){const cs=[];for(let c=0;c<9;c++)if(board[r][c]===0&&cands[r][c].has(n))cs.push(c);if(cs.length===2)rd.push({r,cs});}for(let i=0;i<rd.length;i++)for(let j=i+1;j<rd.length;j++){const a=rd[i],b=rd[j];if(a.cs[0]===b.cs[0]&&a.cs[1]===b.cs[1])for(const col of a.cs)for(let r=0;r<9;r++){if(r===a.r||r===b.r)continue;if(board[r][col]===0&&cands[r][col].has(n)){cands[r][col].delete(n);f=true;}}}const cd=[];for(let c=0;c<9;c++){const rs=[];for(let r=0;r<9;r++)if(board[r][c]===0&&cands[r][c].has(n))rs.push(r);if(rs.length===2)cd.push({c,rs});}for(let i=0;i<cd.length;i++)for(let j=i+1;j<cd.length;j++){const a=cd[i],b=cd[j];if(a.rs[0]===b.rs[0]&&a.rs[1]===b.rs[1])for(const row of a.rs)for(let c=0;c<9;c++){if(c===a.c||c===b.c)continue;if(board[row][c]===0&&cands[row][c].has(n)){cands[row][c].delete(n);f=true;}}}}if(f)mark(3.2);return f;}
   function swordfish2(){let f=false;for(let n=1;n<=9;n++){const rd=[];for(let r=0;r<9;r++){const cs=[];for(let c=0;c<9;c++)if(board[r][c]===0&&cands[r][c].has(n))cs.push(c);if(cs.length===2||cs.length===3)rd.push({r,cs});}for(let i=0;i<rd.length;i++)for(let j=i+1;j<rd.length;j++)for(let k=j+1;k<rd.length;k++){const cols=new Set([...rd[i].cs,...rd[j].cs,...rd[k].cs]);if(cols.size===3){const r3=[rd[i].r,rd[j].r,rd[k].r];for(const col of cols)for(let r=0;r<9;r++){if(r3.includes(r))continue;if(board[r][col]===0&&cands[r][col].has(n)){cands[r][col].delete(n);f=true;}}}}}if(f)mark(3.8);return f;}
   function xywing2(){let f=false;const biv=[];for(let r=0;r<9;r++)for(let c=0;c<9;c++)if(board[r][c]===0&&cands[r][c].size===2)biv.push([r,c]);for(const[pr,pc]of biv){const[x,y]=[...cands[pr][pc]];const wX=biv.filter(([r,c])=>!(r===pr&&c===pc)&&sv(pr,pc,r,c)&&cands[r][c].has(x)&&!cands[r][c].has(y));const wY=biv.filter(([r,c])=>!(r===pr&&c===pc)&&sv(pr,pc,r,c)&&cands[r][c].has(y)&&!cands[r][c].has(x));for(const[r1,c1]of wX){const z1=[...cands[r1][c1]].find(n=>n!==x);for(const[r2,c2]of wY){const z2=[...cands[r2][c2]].find(n=>n!==y);if(z1!==z2)continue;for(let r=0;r<9;r++)for(let c=0;c<9;c++){if(board[r][c]!==0||(r===r1&&c===c1)||(r===r2&&c===c2))continue;if(sv(r,c,r1,c1)&&sv(r,c,r2,c2)&&cands[r][c].has(z1)){cands[r][c].delete(z1);f=true;}}}}}if(f)mark(4.2);return f;}
   function wwing2(){let f=false;const biv=[];for(let r=0;r<9;r++)for(let c=0;c<9;c++)if(board[r][c]===0&&cands[r][c].size===2)biv.push([r,c]);for(let i=0;i<biv.length;i++)for(let j=i+1;j<biv.length;j++){const[r1,c1]=biv[i],[r2,c2]=biv[j];const c1a=[...cands[r1][c1]],c2a=[...cands[r2][c2]];if(c1a[0]!==c2a[0]||c1a[1]!==c2a[1])continue;if(sv(r1,c1,r2,c2))continue;const[x,y]=[c1a[0],c1a[1]];for(const unit of units2){const xPl=unit.filter(([r,c])=>board[r][c]===0&&cands[r][c].has(x));if(xPl.length!==2)continue;const[pa,pb]=xPl;for(const[pa2,pb2]of[[pa,pb],[pb,pa]]){if(sv(pa2[0],pa2[1],r1,c1)&&sv(pb2[0],pb2[1],r2,c2)&&!(pa2[0]===r1&&pa2[1]===c1)&&!(pb2[0]===r2&&pb2[1]===c2)){for(let r=0;r<9;r++)for(let c=0;c<9;c++){if(board[r][c]!==0||(r===r1&&c===c1)||(r===r2&&c===c2))continue;if(sv(r,c,r1,c1)&&sv(r,c,r2,c2)&&cands[r][c].has(y)){cands[r][c].delete(y);f=true;}}}}}}if(f)mark(4.3);return f;}
   function xyzwing2(){let f=false;const triv=[],biv2=[];for(let r=0;r<9;r++)for(let c=0;c<9;c++){if(board[r][c]!==0)continue;if(cands[r][c].size===3)triv.push([r,c]);if(cands[r][c].size===2)biv2.push([r,c]);}for(const[pr,pc]of triv){const pcs=[...cands[pr][pc]];for(const[r1,c1]of biv2){if(!sv(pr,pc,r1,c1))continue;const w1=[...cands[r1][c1]];if(!w1.every(n=>pcs.includes(n)))continue;for(const[r2,c2]of biv2){if(r2===r1&&c2===c1)continue;if(!sv(pr,pc,r2,c2))continue;const w2=[...cands[r2][c2]];if(!w2.every(n=>pcs.includes(n)))continue;const m1=pcs.find(n=>!w1.includes(n)),m2=pcs.find(n=>!w2.includes(n));if(!m1||!m2||m1===m2)continue;const z=pcs.find(n=>n!==m1&&n!==m2);if(!z)continue;for(let r=0;r<9;r++)for(let c=0;c<9;c++){if(board[r][c]!==0||(r===pr&&c===pc)||(r===r1&&c===c1)||(r===r2&&c===c2))continue;if(sv(r,c,pr,pc)&&sv(r,c,r1,c1)&&sv(r,c,r2,c2)&&cands[r][c].has(z)){cands[r][c].delete(z);f=true;}}}}}if(f)mark(4.4);return f;}
-  function uniqueRect2(){let f=false;for(let r1=0;r1<9;r1++)for(let r2=r1+1;r2<9;r2++)for(let c1=0;c1<9;c1++)for(let c2=c1+1;c2<9;c2++){if(~~(r1/3)===~~(r2/3)&&~~(c1/3)===~~(c2/3))continue;const cells=[[r1,c1],[r1,c2],[r2,c1],[r2,c2]];const empty=cells.filter(([r,c])=>board[r][c]===0);if(empty.length<3)continue;if(empty.length===3){const ceil=cells.find(([r,c])=>!empty.some(([er,ec])=>er===r&&ec===c));if(!ceil||board[ceil[0]][ceil[1]]!==0)continue;const common2=empty.reduce((acc,[r,c])=>acc===null?[...cands[r][c]]:acc.filter(n=>cands[r][c].has(n)),null)||[];if(common2.length!==2)continue;common2.forEach(n=>{if(cands[ceil[0]][ceil[1]].has(n)){cands[ceil[0]][ceil[1]].delete(n);f=true;}});}}if(f)mark(4.5);return f;}
-  function skyscraper2(){let f=false;for(let n=1;n<=9;n++){const rd=[];for(let r=0;r<9;r++){const cs=[];for(let c=0;c<9;c++)if(board[r][c]===0&&cands[r][c].has(n))cs.push(c);if(cs.length===2)rd.push({r,cs});}for(let i=0;i<rd.length;i++)for(let j=i+1;j<rd.length;j++){const a=rd[i],b=rd[j];for(const sh of[0,1]){if(a.cs[sh]===b.cs[sh]&&a.cs[1-sh]!==b.cs[1-sh]){const e1=[a.r,a.cs[1-sh]],e2=[b.r,b.cs[1-sh]];for(let r=0;r<9;r++)for(let c=0;c<9;c++){if(board[r][c]!==0||(r===e1[0]&&c===e1[1])||(r===e2[0]&&c===e2[1]))continue;if(sv(r,c,e1[0],e1[1])&&sv(r,c,e2[0],e2[1])&&cands[r][c].has(n)){cands[r][c].delete(n);f=true;}}}}}const cd=[];for(let c=0;c<9;c++){const rs=[];for(let r=0;r<9;r++)if(board[r][c]===0&&cands[r][c].has(n))rs.push(r);if(rs.length===2)cd.push({c,rs});}for(let i=0;i<cd.length;i++)for(let j=i+1;j<cd.length;j++){const a=cd[i],b=cd[j];for(const sh of[0,1]){if(a.rs[sh]===b.rs[sh]&&a.rs[1-sh]!==b.rs[1-sh]){const e1=[a.rs[1-sh],a.c],e2=[b.rs[1-sh],b.c];for(let r=0;r<9;r++)for(let c=0;c<9;c++){if(board[r][c]!==0||(r===e1[0]&&c===e1[1])||(r===e2[0]&&c===e2[1]))continue;if(sv(r,c,e1[0],e1[1])&&sv(r,c,e2[0],e2[1])&&cands[r][c].has(n)){cands[r][c].delete(n);f=true;}}}}}}if(f)mark(4.3);return f;}
+  function urect2(){let f=false;for(let r1=0;r1<9;r1++)for(let r2=r1+1;r2<9;r2++)for(let c1=0;c1<9;c1++)for(let c2=c1+1;c2<9;c2++){if(~~(r1/3)===~~(r2/3)&&~~(c1/3)===~~(c2/3))continue;const cells=[[r1,c1],[r1,c2],[r2,c1],[r2,c2]];const empty=cells.filter(([r,c])=>board[r][c]===0);if(empty.length<3)continue;if(empty.length===3){const ceil=cells.find(([r,c])=>!empty.some(([er,ec])=>er===r&&ec===c));if(!ceil||board[ceil[0]][ceil[1]]!==0)continue;const com=empty.reduce((acc,[r,c])=>acc===null?[...cands[r][c]]:acc.filter(n=>cands[r][c].has(n)),null)||[];if(com.length!==2)continue;com.forEach(n=>{if(cands[ceil[0]][ceil[1]].has(n)){cands[ceil[0]][ceil[1]].delete(n);f=true;}});}}if(f)mark(4.5);return f;}
+  function sky2(){let f=false;for(let n=1;n<=9;n++){const rd=[];for(let r=0;r<9;r++){const cs=[];for(let c=0;c<9;c++)if(board[r][c]===0&&cands[r][c].has(n))cs.push(c);if(cs.length===2)rd.push({r,cs});}for(let i=0;i<rd.length;i++)for(let j=i+1;j<rd.length;j++){const a=rd[i],b=rd[j];for(const sh of[0,1]){if(a.cs[sh]===b.cs[sh]&&a.cs[1-sh]!==b.cs[1-sh]){const e1=[a.r,a.cs[1-sh]],e2=[b.r,b.cs[1-sh]];for(let r=0;r<9;r++)for(let c=0;c<9;c++){if(board[r][c]!==0||(r===e1[0]&&c===e1[1])||(r===e2[0]&&c===e2[1]))continue;if(sv(r,c,e1[0],e1[1])&&sv(r,c,e2[0],e2[1])&&cands[r][c].has(n)){cands[r][c].delete(n);f=true;}}}}}const cd=[];for(let c=0;c<9;c++){const rs=[];for(let r=0;r<9;r++)if(board[r][c]===0&&cands[r][c].has(n))rs.push(r);if(rs.length===2)cd.push({c,rs});}for(let i=0;i<cd.length;i++)for(let j=i+1;j<cd.length;j++){const a=cd[i],b=cd[j];for(const sh of[0,1]){if(a.rs[sh]===b.rs[sh]&&a.rs[1-sh]!==b.rs[1-sh]){const e1=[a.rs[1-sh],a.c],e2=[b.rs[1-sh],b.c];for(let r=0;r<9;r++)for(let c=0;c<9;c++){if(board[r][c]!==0||(r===e1[0]&&c===e1[1])||(r===e2[0]&&c===e2[1]))continue;if(sv(r,c,e1[0],e1[1])&&sv(r,c,e2[0],e2[1])&&cands[r][c].has(n)){cands[r][c].delete(n);f=true;}}}}}}if(f)mark(4.3);return f;}
   let progress=true;
   while(progress){
     progress=false;
@@ -379,21 +374,29 @@ function ratePuzzle(puz){
     for(let r=0;r<9;r++)for(let c=0;c<9;c++){if(board[r][c]!==0)continue;if(cands[r][c].size===1){pl(r,c,[...cands[r][c]][0]);mark(2.3);placed=true;progress=true;}}
     if(placed)continue;
     let hs=false;
-    for(const unit of units2){for(let n=1;n<=9;n++){if(unit.some(([r,c])=>board[r][c]===n))continue;const p2=unit.filter(([r,c])=>board[r][c]===0&&cands[r][c].has(n));if(p2.length===1){pl(p2[0][0],p2[0][1],n);mark(1.5);hs=true;progress=true;}}}
+    for(const unit of units2){for(let n=1;n<=9;n++){if(unit.some(([r,c])=>board[r][c]===n))continue;const pp=unit.filter(([r,c])=>board[r][c]===0&&cands[r][c].has(n));if(pp.length===1){pl(pp[0][0],pp[0][1],n);mark(1.5);hs=true;progress=true;}}}
     if(hs)continue;
     if(locked2()){progress=true;continue;}
-    if(nakedSubset2(2,3.0)){progress=true;continue;}
-    if(hiddenSubset2(2,3.4)){progress=true;continue;}
-    if(nakedSubset2(3,3.6)){progress=true;continue;}
+    if(nakedS(2,3.0)){progress=true;continue;}
+    if(hiddenS(2,3.4)){progress=true;continue;}
+    if(nakedS(3,3.6)){progress=true;continue;}
     if(xwing2()){progress=true;continue;}
-    if(swordfish2()||hiddenSubset2(3,4.0)){progress=true;continue;}
+    if(swordfish2()||hiddenS(3,4.0)){progress=true;continue;}
     if(xywing2()||wwing2()){progress=true;continue;}
-    if(xyzwing2()||uniqueRect2()||skyscraper2()){progress=true;continue;}
+    if(xyzwing2()||urect2()||sky2()){progress=true;continue;}
     break;
   }
   const unsolved=board.reduce((s,r)=>s+r.filter(v=>v===0).length,0);
-  if(unsolved>0)return{score:maxSE||'?',label:'?'};
-  return{score:maxSE,label:String(maxSE.toFixed(1))};
+  if(unsolved>0){
+    // Couldn't fully solve — use logicSolveLevel to get correct level and floor the score
+    for(let lv=1;lv<=5;lv++){
+      if(logicSolveLevel(puz.map(r=>[...r]),lv)===null)continue;
+      const floorSE={1:1.5,2:2.6,3:3.6,4:4.2,5:4.4}[lv]||4.4;
+      const se=Math.max(maxSE,floorSE);
+      return{score:se,label:se.toFixed(1)};
+    }
+  }
+  return{score:maxSE,label:maxSE.toFixed(1)};
 }
 
 function countSolutions(b,limit){
@@ -631,7 +634,11 @@ function onCellMouseDown(e,r,c){
   }
   if(longPressTimer){clearTimeout(longPressTimer);longPressTimer=null;}longPressOrigin=null;
   if(ctrlHeld){if(selectedCell&&multiSelected.size===0){multiSelected.add(`${selectedCell[0]},${selectedCell[1]}`);selectedCell=null;}startMultiDrag(r,c,true);}
-  else{selectCell(r,c);longPressOrigin=[r,c];longPressTimer=setTimeout(()=>{longPressTimer=null;},LONG_PRESS_MS);}
+  else{
+    // Click already-selected cell → deselect
+    if(selectedCell&&selectedCell[0]===r&&selectedCell[1]===c){selectedCell=null;multiSelected.clear();applyHighlights();return;}
+    selectCell(r,c);longPressOrigin=[r,c];longPressTimer=setTimeout(()=>{longPressTimer=null;},LONG_PRESS_MS);
+  }
 }
 function startMultiDrag(r,c,additive){isDragging=true;const key=`${r},${c}`;if(additive&&multiSelected.size>0){if(multiSelected.has(key))multiSelected.delete(key);else multiSelected.add(key);}else{multiSelected.clear();multiSelected.add(key);}selectedCell=null;applyHighlights();}
 function onCellMouseEnter(e,r,c){
@@ -701,7 +708,9 @@ function inputNum(n){
   for(let i=0;i<9;i++){notesBoard[r][i].delete(n);notesBoard[i][c].delete(n);}
   const br=~~(r/3)*3,bc=~~(c/3)*3;for(let dr=0;dr<3;dr++)for(let dc=0;dc<3;dc++)notesBoard[br+dr][bc+dc].delete(n);
   if(n!==solution[r][c]&&prevVal!==n){errorCount++;updateHearts();updateStats();const cell=document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);if(cell){cell.classList.add('anim-shake');setTimeout(()=>cell.classList.remove('anim-shake'),350);}if(errorCount>=3){gameWon=true;stopTimer();refreshAllCells();applyHighlights();setTimeout(()=>document.getElementById('lose-overlay').classList.add('show'),400);return;}}
-  refreshAllCells();applyHighlights();updateStats();checkWin();
+  refreshAllCells();applyHighlights();updateStats();
+  if(n===solution[r][c])checkDigitComplete(n);
+  checkWin();
 }
 
 function fillAllCandidates(){for(let r=0;r<9;r++)for(let c=0;c<9;c++){if(userBoard[r][c]!==0)continue;notesBoard[r][c]=getCandidates(userBoard,r,c);}refreshAllCells();applyHighlights();}
@@ -742,6 +751,21 @@ function resetBoard(){
   cellHintsLeft=3;updateCellHintBtn();undoStack=[];
   updateHearts();updateStats();updateNumColUI();gameWon=false;resetTimer();startTimer();renderBoard();
 }
+
+function checkDigitComplete(n){
+  // Count correct placements of this digit
+  let count=0;
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++)if(userBoard[r][c]===n&&userBoard[r][c]===solution[r][c])count++;
+  if(count!==9)return;
+  // Flash all 9 cells of this digit
+  document.querySelectorAll('.cell').forEach(cell=>{
+    const r=+cell.dataset.row,c=+cell.dataset.col;
+    if(userBoard[r][c]===n){
+      setTimeout(()=>{cell.classList.add('anim-complete');setTimeout(()=>cell.classList.remove('anim-complete'),500);},~~(Math.random()*80));
+    }
+  });
+}
+
 
 function checkWin(){
   for(let r=0;r<9;r++)for(let c=0;c<9;c++)if(userBoard[r][c]!==solution[r][c])return;
