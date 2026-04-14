@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>俄罗斯方块</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="../theme.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="main-container">
+    <section class="board-wrap">
+      <canvas id="tetris" width="300" height="600" tabindex="0"></canvas>
+    </section>
+
+    <aside class="controls-panel">
+      <div class="panel-section panel-plain mode-switch-card" id="mode-switch-card" role="switch" aria-label="输入布局切换" aria-checked="false" tabindex="0">
+        <div class="mode-zone top" id="mode-wasd">WASD布局</div>
+        <div class="mode-thumb" id="mode-thumb"></div>
+        <div class="mode-zone bottom" id="mode-arrow">↑↓←→布局</div>
+      </div>
+      <div class="panel-section panel-plain score-strip">
+        <div class="score-line"><span class="score-label">分数</span><span class="score-value" id="score">0</span></div>
+        <div class="score-line"><span class="score-label">速度</span><span class="score-value blue" id="speed">1.0x</span></div>
+      </div>
+      <div class="panel-section panel-plain">
+        <button class="action-btn primary" id="new-game">新游戏</button>
+      </div>
+      <div class="panel-section panel-plain">
+        <div class="panel-label">预览（3个）</div>
+        <canvas id="next" width="120" height="240"></canvas>
+      </div>
+      <div class="panel-section panel-plain">
+        <div class="panel-label">Hold（Ctrl）</div>
+        <canvas id="hold" width="120" height="120"></canvas>
+      </div>
+    </aside>
+  </main>
+  <div class="hint hint-outside" id="control-hint">WASD布局：A/D 移动 · W 顺时针 · Q 逆时针 · R 180° · F Hold · S 长按加速 · 空格硬降</div>
+
+  <div class="overlay" id="result-overlay">
+    <div class="overlay-card">
+      <div class="overlay-title">GAME OVER</div>
+      <div class="overlay-sub" id="result-message">得分 0</div>
+      <button class="action-btn primary" id="restart-btn">再来一局</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

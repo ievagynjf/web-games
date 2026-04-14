@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>打砖块</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="../theme.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="main-container">
+    <aside class="controls-panel">
+      <div class="panel-section panel-plain score-strip">
+        <div class="score-line"><span class="score-label">生命</span><span class="score-value blue" id="lives">3</span></div>
+      </div>
+
+      <div class="panel-section panel-plain">
+        <button class="action-btn primary" id="new-game">新游戏</button>
+      </div>
+
+      <div class="panel-section panel-plain">
+        <button class="mode-switch" id="control-mode" type="button" aria-label="切换操作模式">
+          <span class="mode-knob" id="control-mode-knob"></span>
+          <span class="mode-label mode-label-left">键盘</span>
+          <span class="mode-label mode-label-right">鼠标</span>
+        </button>
+      </div>
+
+    </aside>
+
+    <section class="board-wrap">
+      <canvas id="game" width="640" height="720" tabindex="0"></canvas>
+      <div class="board-hint" id="board-hint">A / D 或 ← / → 移动　空格发球</div>
+    </section>
+  </main>
+
+  <div class="overlay" id="result-overlay">
+    <div class="overlay-card">
+      <div class="overlay-title" id="result-title">结束</div>
+      <div class="overlay-sub" id="result-message">本局结束</div>
+      <button class="action-btn primary" id="restart-btn">再来一局</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

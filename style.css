@@ -1,0 +1,69 @@
+@import url('./theme.css');
+
+body {
+    font-family: var(--sans);
+    background-color: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 底部标签栏容器 */
+.tab-bar {
+    order: 2;
+    width: 100%;
+    background-color: #252219;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    gap: 3px;
+    padding: 0 6px;
+    margin-top: -1px;
+    border-top: 1px solid #3a3530;
+    border-bottom: none;
+}
+
+/* 标签按钮样式 */
+.tab-btn {
+    height: 26px;
+    min-width: 62px;
+    padding: 0 10px;
+    cursor: pointer;
+    background: #201e1a;
+    color: #a89878;
+    border: 1px solid #3a3530;
+    border-top: none;
+    border-radius: 0 0 7px 7px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+/* 鼠标悬停效果 */
+.tab-btn:hover {
+    background: #2c2820;
+    color: #f0c870;
+    border-color: #d4a84b;
+}
+
+/* 当前选中的标签高亮 */
+.tab-btn.active {
+    background: #d4a84b;
+    color: #1a1408;
+    font-weight: 700;
+    border-color: #d4a84b;
+    box-shadow: 0 2px 10px rgba(212,168,75,0.25);
+}
+
+/* 游戏展示窗口 (Iframe) */
+#game-frame {
+    order: 1;
+    flex: 1 1 auto;
+    width: 100%;
+    border: none;
+    background-color: #1a1a1a;
+    opacity: 1;
+    transition: opacity 0.16s ease;
+}

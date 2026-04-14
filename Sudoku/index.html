@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>数独</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="main-container">
+    <aside class="controls-panel">
+      <div class="panel-section panel-section-fixed">
+        <div class="mode-tabs">
+          <button class="mode-tab active" data-action="set-mode" data-mode="normal">普通数独</button>
+          <button class="mode-tab" data-action="set-mode" data-mode="killer">杀手数独</button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-label">难度选择</div>
+        <div class="diff-grid" id="diff-grid"></div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-label">操作</div>
+        <div class="action-grid" id="action-grid"></div>
+      </div>
+    </aside>
+
+    <section class="board-layout-row">
+      <div class="board-container">
+        <div class="board-wrapper">
+          <div id="sudoku-board"></div>
+          <svg id="cage-overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+          <svg id="multi-overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+
+        <div class="board-footer">
+          <span class="timer-display" id="timer">00:00</span>
+          <span class="footer-sep">·</span>
+          <span class="footer-counter" id="life-display">错误 0/3</span>
+          <span class="footer-sep">·</span>
+          <button class="hint-btn" id="cell-hint-btn" data-action="use-cell-hint">
+            提示 <span id="cell-hint-left">0/3</span>
+          </button>
+          <span id="notes-label" class="notes-label">● 候选数</span>
+        </div>
+
+        <div class="history-block">
+          <div class="hb-row">
+            <div class="hb-item">
+              <span class="hb-label">本局得分</span>
+              <span class="hb-value" id="cur-score">0</span>
+            </div>
+            <div class="hb-divider"></div>
+            <div class="hb-item">
+              <span class="hb-label">历史最高分</span>
+              <span class="hb-value" id="best-score">—</span>
+            </div>
+            <div class="hb-divider"></div>
+            <div class="hb-item">
+              <span class="hb-label">最短用时</span>
+              <span class="hb-value blue" id="best-time">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="num-column" id="num-column"></div>
+    </section>
+  </main>
+
+  <div id="color-strip" class="color-strip">
+    <div id="cs-swatches" class="cs-swatches"></div>
+    <label class="cs-custom-label">
+      <input type="color" id="cs-custom" value="#ff6b6b" class="cs-custom-input">
+      <div id="cs-custom-preview" class="cs-custom-preview">自定义</div>
+    </label>
+    <button id="clear-note-colors-btn" data-action="clear-note-colors" class="clear-note-colors-btn">
+      清除所有颜色标记
+    </button>
+  </div>
+
+  <div class="overlay" id="io-overlay" data-action="io-overlay">
+    <div class="overlay-card overlay-card-io">
+      <div class="io-header-row">
+        <div class="overlay-title io-title" id="io-title">操作</div>
+        <button data-action="close-io" class="io-close-btn">✕</button>
+      </div>
+      <div id="io-body"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="result-overlay">
+    <div class="overlay-card">
+      <div class="overlay-title" id="result-title">结果</div>
+      <div class="overlay-sub" id="result-message">本局已结束</div>
+      <button class="action-btn primary result-btn-primary" id="result-retry-btn" data-action="result-retry">继续</button>
+      <button class="action-btn result-btn-secondary" id="result-secondary-btn" data-action="close-overlay">关闭</button>
+    </div>
+  </div>
+
+  <script src="puzzle_bank.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+:root {
+  --bg: #1a1814;
+  --bg2: #201e1a;
+  --surface: #252219;
+  --surface2: #2c2820;
+  --border: #3a3530;
+  --border2: #4a4540;
+  --text: #e8dcc8;
+  --text2: #a89878;
+  --text3: #6a5a48;
+  --accent: #d4a84b;
+  --accent2: #f0c870;
+  --red: #ff5252;
+  --green: #4ade80;
+  --blue: #60b8ff;
+  --purple: #b06aff;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Noto Sans SC', sans-serif;
+  --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(212, 168, 75, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 70% 80%, rgba(96, 184, 255, 0.03) 0%, transparent 60%);
+}
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.panel-section-fixed {
+  flex: 0 0 auto;
+}
+
+.panel-label {
+  margin-bottom: 12px;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.main-container {
+  display: flex;
+  position: relative;
+  z-index: 10;
+}
+
+.controls-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.board-layout-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.mode-tabs {
+  display: flex;
+}
+
+.mode-tab,
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a1408;
+  font-weight: 700;
+}
+
+.mode-tab:hover,
+.action-btn:hover {
+  border-color: var(--accent2);
+  color: var(--accent2);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 999;
+}
+
+.overlay.show {
+  display: flex;
+}
+
+.overlay-card {
+  width: min(420px, calc(100vw - 30px));
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.overlay-title {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent2);
+}

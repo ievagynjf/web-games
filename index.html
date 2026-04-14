@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>我的游戏大厅</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchGame('sudoku/index.html', this)">数独</button>
+        <button class="tab-btn" onclick="switchGame('minesweeper/index.html', this)">扫雷</button>
+        <button class="tab-btn" onclick="switchGame('tetris/index.html', this)">俄罗斯方块</button>
+        <button class="tab-btn" onclick="switchGame('Breakout/index.html', this)">打砖块</button>
+    </div>
+    <iframe id="game-frame" src="sudoku/index.html"></iframe>
+    <script>
+        function switchGame(url, element) {
+            // 1. 切换 iframe 的地址
+            document.getElementById('game-frame').src = url;
+
+            // 2. 切换标签页的高亮状态
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            element.classList.add('active');
+        }
+    </script>
+</body>
+</html>

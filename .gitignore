@@ -1,0 +1,11 @@
+# Sudoku local/development environment
+Sudoku/.venv/
+Sudoku/.claude/
+
+# Python cache/artifacts under Sudoku tools
+Sudoku/**/__pycache__/
+Sudoku/**/*.pyc
+
+# Non-game generation/tooling assets in Sudoku
+Sudoku/sudoku_generator/
+Sudoku/sudoku-exchange-puzzle-bank-master/

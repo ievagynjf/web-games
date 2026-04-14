@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>扫雷</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="main-container">
+    <aside class="controls-panel">
+      <div class="panel-section score-strip">
+        <div class="score-line"><span class="score-label">计时</span><span class="score-value" id="timer">00:00</span></div>
+        <div class="score-line"><span class="score-label">剩余雷数</span><span class="score-value blue" id="mine-left">0</span></div>
+      </div>
+
+      <div class="panel-section panel-section-fixed panel-plain">
+        <div class="mode-tabs" id="mode-tabs"></div>
+        <div class="custom-mode-box">
+          <label>宽 <input id="custom-cols" type="number" min="5" value="20"></label>
+          <label>高 <input id="custom-rows" type="number" min="5" value="16"></label>
+          <label>雷 <input id="custom-mines" type="number" min="1" value="60"></label>
+        </div>
+      </div>
+
+      <div class="panel-section panel-section-grow panel-plain">
+        <div class="action-grid">
+          <button class="action-btn primary" data-action="new-game">新游戏</button>
+          <button class="action-btn" data-action="reset-game">重开本局</button>
+          <label class="switch-row">
+            <span class="switch-label">自动插旗</span>
+            <input id="auto-flag-toggle" type="checkbox" class="switch-input">
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+      </div>
+    </aside>
+
+    <section class="board-layout-row">
+      <div class="board-container">
+        <div class="board-wrapper">
+          <div id="mine-board"></div>
+        </div>
+
+
+      </div>
+    </section>
+  </main>
+
+  <div class="overlay" id="result-overlay">
+    <div class="overlay-card">
+      <div class="overlay-title" id="result-title">结果</div>
+      <div class="overlay-sub" id="result-message">本局已结束</div>
+      <button class="action-btn primary result-btn-primary" data-action="new-game">再来一局</button>
+      <button class="action-btn result-btn-secondary" data-action="close-overlay">关闭</button>
+    </div>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
