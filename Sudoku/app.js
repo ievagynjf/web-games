@@ -580,6 +580,37 @@ function buildNormalPuzzleFromBank(){
   };
 }
 
+function loadDifficultyBank(diff){
+  if(PUZZLE_BANK[diff])return Promise.resolve();
+  const existing=document.querySelector(`script[data-bank="${diff}"]`);
+  if(existing)return new Promise((resolve,reject)=>{
+    existing.addEventListener('load',resolve,{once:true});
+    existing.addEventListener('error',reject,{once:true});
+  });
+  return new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    script.src=`puzzle_bank_${diff}.js`;
+    script.dataset.bank=diff;
+    script.onload=resolve;
+    script.onerror=reject;
+    document.head.appendChild(script);
+  });
+}
+
+function preloadDifficultyBanks(){
+  const pending=DIFF_OPTIONS.map(item=>item.value).filter(diff=>!PUZZLE_BANK[diff]);
+  const next=()=>{
+    const diff=pending.shift();
+    if(!diff)return;
+    loadDifficultyBank(diff).catch(()=>{}).finally(()=>{
+      if(window.requestIdleCallback)requestIdleCallback(next,{timeout:1500});
+      else setTimeout(next,50);
+    });
+  };
+  if(window.requestIdleCallback)requestIdleCallback(next,{timeout:1500});
+  else setTimeout(next,50);
+}
+
 function newGame(){
   if(gameMode==='killer'){
     solution=generateSolution();
@@ -617,7 +648,14 @@ function newGame(){
 
 /* UI */
 function setMode(m){if(gameMode===m)return;gameMode=m;syncModeDiffUI();newGame();}
-function setDiff(d){if(difficulty===d)return;difficulty=d;syncModeDiffUI();newGame();}
+function setDiff(d){
+  if(difficulty===d)return;
+  loadDifficultyBank(d).then(()=>{
+    difficulty=d;
+    syncModeDiffUI();
+    newGame();
+  }).catch(()=>showToast('题库加载失败，请重试'));
+}
 function closeOverlay(){const el=document.getElementById('result-overlay');if(el)el.classList.remove('show');}
 
 function bindTopControls(){
@@ -1017,3 +1055,4 @@ if(!loadProgress()){
   startTimer();
   renderBoard(); updateHearts(); updateStats(); updateNumColUI();  refreshHistory();
 }
+preloadDifficultyBanks();
