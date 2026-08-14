@@ -58,12 +58,12 @@ body {
 }
 
 /* 游戏展示窗口 (Iframe) */
-#game-frame {
-    order: 1;
-    flex: 1 1 auto;
-    width: 100%;
-    border: none;
-    background-color: #1a1a1a;
-    opacity: 1;
-    transition: opacity 0.16s ease;
+.game-frame {
+  order: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  border: none;
+  background-color: #1a1a1a;
 }
+
+.game-frame:not(.active) { display: none; }

@@ -7,20 +7,21 @@
 </head>
 <body>
     <div class="tab-bar">
-        <button class="tab-btn active" onclick="switchGame('Sudoku/index.html', this)">数独</button>
-        <button class="tab-btn" onclick="switchGame('Minesweeper/index.html', this)">扫雷</button>
-        <button class="tab-btn" onclick="switchGame('Tetris/index.html', this)">俄罗斯方块</button>
-        <button class="tab-btn" onclick="switchGame('Breakout/index.html', this)">打砖块</button>
+        <button class="tab-btn active" onclick="switchGame('sudoku', this)">数独</button>
+        <button class="tab-btn" onclick="switchGame('minesweeper', this)">扫雷</button>
+        <button class="tab-btn" onclick="switchGame('tetris', this)">俄罗斯方块</button>
+        <button class="tab-btn" onclick="switchGame('breakout', this)">打砖块</button>
     </div>
-    <iframe id="game-frame" src="Sudoku/index.html"></iframe>
+    <iframe class="game-frame active" data-game="sudoku" src="Sudoku/index.html"></iframe>
+    <iframe class="game-frame" data-game="minesweeper" src="Minesweeper/index.html"></iframe>
+    <iframe class="game-frame" data-game="tetris" src="Tetris/index.html"></iframe>
+    <iframe class="game-frame" data-game="breakout" src="Breakout/index.html"></iframe>
     <script>
-        function switchGame(url, element) {
-            // 1. 切换 iframe 的地址
-            document.getElementById('game-frame').src = url;
-
-            // 2. 切换标签页的高亮状态
-            const buttons = document.querySelectorAll('.tab-btn');
-            buttons.forEach(btn => btn.classList.remove('active'));
+        function switchGame(game, element) {
+            document.querySelectorAll('.game-frame').forEach(frame => {
+                frame.classList.toggle('active', frame.dataset.game === game);
+            });
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             element.classList.add('active');
         }
     </script>
