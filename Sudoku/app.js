@@ -14,6 +14,7 @@ let currentMarkColor='#ff6b6b';
 let noteColors=Array.from({length:9},()=>Array.from({length:9},()=>({})));
 let importWorker=null,importRequestId=0,pendingImport=null;
 const CS=65;
+const SUDOKU_BANK_CHUNK_COUNT=25;
 const MODE_WEIGHT={normal:1,killer:1.6};
 const COLOR_PRESETS=['#ff6b6b','#ff9f43','#ffd32a','#0be881','#48dbfb','#ff9ff3','#a29bfe','#fd79a8','#c0c0c0'];
 const DIFF_OPTIONS=[
@@ -599,23 +600,6 @@ function loadBankChunk(diff,index){
   });
 }
 
-function getReadyBankChunk(diff){
-  const chunks=window.SUDOKU_BANK_CHUNKS||{};
-  const prefix=`${diff}:`;
-  const keys=Object.keys(chunks).filter(key=>key.startsWith(prefix)&&chunks[key]?.length);
-  return keys.length?chunks[keys[~~(Math.random()*keys.length)]]:null;
-}
-
-const bankWarmIndexes={};
-
-function warmBankChunks(){
-  for(const {value:diff} of DIFF_OPTIONS){
-    const index=~~(Math.random()*SUDOKU_BANK_CHUNK_COUNT);
-    bankWarmIndexes[diff]=index;
-    loadBankChunk(diff,index).catch(()=>{});
-  }
-}
-
 let normalGameRequest=0;
 
 function finishNewGame(){
@@ -653,15 +637,7 @@ function newGame(){
     finishNewGame();
     return;
   }
-  const readyBank=getReadyBankChunk(difficulty);
-  if(readyBank){
-    const normal=buildNormalPuzzleFromBank(readyBank);
-    puzzle=normal.puzzle;
-    solution=normal.solution;
-    finishNewGame();
-    return;
-  }
-  const chunkIndex=bankWarmIndexes[difficulty]??~~(Math.random()*SUDOKU_BANK_CHUNK_COUNT);
+  const chunkIndex=~~(Math.random()*SUDOKU_BANK_CHUNK_COUNT);
   loadBankChunk(difficulty,chunkIndex).then(bank=>{
     if(request!==normalGameRequest||!bank?.length)return;
     const normal=buildNormalPuzzleFromBank(bank);
@@ -1067,7 +1043,6 @@ renderNumColumn();
 bindTopControls();
 initColorPicker();
 initImportWorker();
-warmBankChunks();
 if(!loadProgress()){
   newGame();
 } else {
