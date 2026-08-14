@@ -1,1 +1,1 @@
-const PUZZLE_BANK={};
+const SUDOKU_BANK_CHUNK_COUNT=100;

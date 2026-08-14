@@ -567,8 +567,7 @@ function morphGrid(grid,tf,digitMap){
   return out;
 }
 
-function buildNormalPuzzleFromBank(){
-  const bank=PUZZLE_BANK[difficulty]||PUZZLE_BANK.easy;
+function buildNormalPuzzleFromBank(bank){
   const entry=bank[~~(Math.random()*bank.length)];
   const digitMap=[0,...shuffle([1,2,3,4,5,6,7,8,9])];
   const tf=~~(Math.random()*8);
@@ -580,46 +579,29 @@ function buildNormalPuzzleFromBank(){
   };
 }
 
-function loadDifficultyBank(diff){
-  if(PUZZLE_BANK[diff])return Promise.resolve();
-  const existing=document.querySelector(`script[data-bank="${diff}"]`);
+function loadBankChunk(diff,index){
+  const key=`${diff}:${index}`;
+  window.SUDOKU_BANK_CHUNKS=window.SUDOKU_BANK_CHUNKS||{};
+  if(window.SUDOKU_BANK_CHUNKS[key])return Promise.resolve(window.SUDOKU_BANK_CHUNKS[key]);
+  const selector=`script[data-bank-chunk="${key}"]`;
+  const existing=document.querySelector(selector);
   if(existing)return new Promise((resolve,reject)=>{
-    existing.addEventListener('load',resolve,{once:true});
+    existing.addEventListener('load',()=>resolve(window.SUDOKU_BANK_CHUNKS[key]),{once:true});
     existing.addEventListener('error',reject,{once:true});
   });
   return new Promise((resolve,reject)=>{
     const script=document.createElement('script');
-    script.src=`puzzle_bank_${diff}.js`;
-    script.dataset.bank=diff;
-    script.onload=resolve;
+    script.src=`bank_chunks/${diff}/${index}.js`;
+    script.dataset.bankChunk=key;
+    script.onload=()=>resolve(window.SUDOKU_BANK_CHUNKS[key]);
     script.onerror=reject;
     document.head.appendChild(script);
   });
 }
 
-function preloadDifficultyBanks(){
-  const pending=DIFF_OPTIONS.map(item=>item.value).filter(diff=>!PUZZLE_BANK[diff]);
-  const next=()=>{
-    const diff=pending.shift();
-    if(!diff)return;
-    loadDifficultyBank(diff).catch(()=>{}).finally(()=>{
-      if(window.requestIdleCallback)requestIdleCallback(next,{timeout:1500});
-      else setTimeout(next,50);
-    });
-  };
-  if(window.requestIdleCallback)requestIdleCallback(next,{timeout:1500});
-  else setTimeout(next,50);
-}
+let normalGameRequest=0;
 
-function newGame(){
-  if(gameMode==='killer'){
-    solution=generateSolution();
-    puzzle=solution.map(r=>[...r]);
-  } else {
-    const normal=buildNormalPuzzleFromBank();
-    puzzle=normal.puzzle;
-    solution=normal.solution;
-  }
+function finishNewGame(){
   userBoard=puzzle.map(r=>[...r]);
   cages=[];cellCageMap={};
   initRoundState();
@@ -646,15 +628,31 @@ function newGame(){
   scheduleSave();
 }
 
+function newGame(){
+  const request=++normalGameRequest;
+  if(gameMode==='killer'){
+    solution=generateSolution();
+    puzzle=solution.map(r=>[...r]);
+    finishNewGame();
+    return;
+  }
+  const chunkIndex=~~(Math.random()*SUDOKU_BANK_CHUNK_COUNT);
+  loadBankChunk(difficulty,chunkIndex).then(bank=>{
+    if(request!==normalGameRequest||!bank?.length)return;
+    const normal=buildNormalPuzzleFromBank(bank);
+    puzzle=normal.puzzle;
+    solution=normal.solution;
+    finishNewGame();
+  }).catch(()=>showToast('题库加载失败，请重试'));
+}
+
 /* UI */
 function setMode(m){if(gameMode===m)return;gameMode=m;syncModeDiffUI();newGame();}
 function setDiff(d){
   if(difficulty===d)return;
-  loadDifficultyBank(d).then(()=>{
-    difficulty=d;
-    syncModeDiffUI();
-    newGame();
-  }).catch(()=>showToast('题库加载失败，请重试'));
+  difficulty=d;
+  syncModeDiffUI();
+  newGame();
 }
 function closeOverlay(){const el=document.getElementById('result-overlay');if(el)el.classList.remove('show');}
 
@@ -1055,4 +1053,3 @@ if(!loadProgress()){
   startTimer();
   renderBoard(); updateHearts(); updateStats(); updateNumColUI();  refreshHistory();
 }
-preloadDifficultyBanks();
