@@ -12,6 +12,7 @@ let cellHintsLeft=3;
 let undoStack=[];
 let currentMarkColor='#ff6b6b';
 let noteColors=Array.from({length:9},()=>Array.from({length:9},()=>({})));
+let importWorker=null,importRequestId=0,pendingImport=null;
 const CS=65;
 const MODE_WEIGHT={normal:1,killer:1.6};
 const COLOR_PRESETS=['#ff6b6b','#ff9f43','#ffd32a','#0be881','#48dbfb','#ff9ff3','#a29bfe','#fd79a8','#c0c0c0'];
@@ -140,10 +141,14 @@ function updateHearts(){
 function updateNumColUI(){const counts={};for(let r=0;r<9;r++)for(let c=0;c<9;c++){const v=userBoard[r][c];if(v>0)counts[v]=(counts[v]||0)+1;}for(let i=1;i<=9;i++){const btn=document.getElementById(`nc-${i}`);if(!btn)continue;const done=counts[i]===9;btn.classList.toggle('digit-active',i===activeColNum&&!done);btn.classList.toggle('completed',done);}}
 
 /* TIMER */
-function startTimer(){secondsElapsed=0;timerInterval=setInterval(()=>{secondsElapsed++;document.getElementById('timer').textContent=fmtTime(secondsElapsed);updateStats();if(secondsElapsed%30===0)saveProgress();},1000);}
+function startTimer(){
+  stopTimer();
+  document.getElementById('timer').textContent=fmtTime(secondsElapsed);
+  timerInterval=setInterval(()=>{secondsElapsed++;document.getElementById('timer').textContent=fmtTime(secondsElapsed);updateStats();if(secondsElapsed%30===0)saveProgress();},1000);
+}
 function stopTimer(){clearInterval(timerInterval);}
-function resetTimer(){stopTimer();document.getElementById('timer').textContent='00:00';}
-document.addEventListener('visibilitychange',()=>{if(gameWon)return;if(document.hidden){stopTimer();}else{timerInterval=setInterval(()=>{secondsElapsed++;document.getElementById('timer').textContent=fmtTime(secondsElapsed);updateStats();},1000);}});
+function resetTimer(){stopTimer();secondsElapsed=0;document.getElementById('timer').textContent='00:00';}
+document.addEventListener('visibilitychange',()=>{if(gameWon)return;if(document.hidden){stopTimer();}else{startTimer();}});
 
 /* ENGINE */
 function generateSolution(){const b=Array.from({length:9},()=>Array(9).fill(0));fillBoard(b);return b;}
@@ -759,7 +764,8 @@ function saveProgress() {
       v: 2, gameMode, difficulty,
       b1: encodeB1(),
       sol: solution.map(r=>r.join('')).join(''),
-      hintCells: [...hintCells].join(','),
+      hintCells: [...hintCells],
+      noteColors,
       errorCount, hintCount, cellHintsLeft,
       seconds: secondsElapsed,
       cages: gameMode==='killer' ? cages : [],
@@ -783,8 +789,16 @@ function loadProgress() {
     userBoard = decoded.newUser;
     notesBoard = decoded.newNotes;
     solution=[]; for(let r=0;r<9;r++){const row=[];for(let c=0;c<9;c++)row.push(+s.sol[r*9+c]);solution.push(row);}
-    noteColors = Array.from({length:9},()=>Array.from({length:9},()=>({})));
-    hintCells = new Set(s.hintCells?s.hintCells.split(',').filter(Boolean):[]);
+    noteColors=Array.isArray(s.noteColors)&&s.noteColors.length===9&&s.noteColors.every(row=>Array.isArray(row)&&row.length===9)
+      ? s.noteColors.map(row=>row.map(colors=>({...colors})))
+      : Array.from({length:9},()=>Array.from({length:9},()=>({})));
+    if(Array.isArray(s.hintCells)){
+      hintCells=new Set(s.hintCells.filter(key=>typeof key==='string'&&/^\d,\d$/.test(key)));
+    }else{
+      const legacyHints=String(s.hintCells||'').split(',').filter(Boolean);
+      hintCells=new Set();
+      for(let i=0;i+1<legacyHints.length;i+=2)hintCells.add(`${legacyHints[i]},${legacyHints[i+1]}`);
+    }
     errorCount=s.errorCount||0; hintCount=s.hintCount||0;
     cellHintsLeft=s.cellHintsLeft!=null?s.cellHintsLeft:3;
     secondsElapsed=s.seconds||0;
@@ -796,7 +810,10 @@ function loadProgress() {
   } catch(e) { return false; }
 }
 
-function closeIOModal(){document.getElementById('io-overlay').classList.remove('show');}
+function closeIOModal(){
+  if(pendingImport){pendingImport=null;importRequestId++;}
+  document.getElementById('io-overlay').classList.remove('show');
+}
 function showIOModal(title,bodyHtml,focusId=''){
   document.getElementById('io-title').textContent=title;
   document.getElementById('io-body').innerHTML=bodyHtml;
@@ -826,7 +843,7 @@ function buildImportBody(){
 function showExportModal(){const b1=encodeB1(),plain=puzzle.map(r=>r.map(v=>v||'.').join('')).join('');showIOModal('导出局面',buildExportBody(b1,plain));}
 function showImportModal(){showIOModal('导入局面',buildImportBody(),'io-import-text');}
 function copyIOText(id,msg){const el=document.getElementById(id);navigator.clipboard.writeText(el.value).then(()=>showToast(msg)).catch(()=>{el.select();document.execCommand('copy');showToast(msg);});}
-function doImportFromModal(){const text=document.getElementById('io-import-text').value.trim();if(!text)return showToast('请先粘贴字符串');closeIOModal();parseAndLoad(text);}
+function doImportFromModal(){const text=document.getElementById('io-import-text').value.trim();if(!text)return showToast('请先粘贴字符串');parseAndLoad(text);}
 function parseAndLoad(text){
   const lines=text.trim().split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#'));
   const b1line=lines.find(l=>l.startsWith('B1:'));
@@ -859,33 +876,120 @@ function applyImportedGameState(successMsg){
 function importFromB1(b1str) {
   const decoded=decodeB1(b1str);
   if(!decoded){showToast('B1 字符串解码失败');return;}
-  stopTimer();
-  puzzle=decoded.newPuzzle;
-  userBoard=decoded.newUser;
-  notesBoard=decoded.newNotes;
-  const sol=puzzle.map(r=>[...r]);
-  if(!backtrackSolve(sol)){showToast('该谜题无解');return;}
-  solution=sol;
-  applyImportedGameState(`导入成功（含候选数，共 ${b1str.length} 字符）`);
+  requestImportValidation(decoded.newPuzzle,solvedBoard=>{
+    puzzle=decoded.newPuzzle;
+    userBoard=decoded.newUser;
+    notesBoard=decoded.newNotes;
+    solution=solvedBoard;
+    closeIOModal();
+    applyImportedGameState(`导入成功（含候选数，共 ${b1str.length} 字符）`);
+  });
 }
 
 function importPuzzleString(str){
-  stopTimer();
-  puzzle=Array.from({length:SIZE},(_,r)=>Array.from({length:SIZE},(_,c)=>str[r*SIZE+c]==='.'?0:+str[r*SIZE+c]));
-  const sol=puzzle.map(r=>[...r]);
-  if(!backtrackSolve(sol))return showToast('该谜题无解');
-  solution=sol;userBoard=puzzle.map(r=>[...r]);
-  notesBoard=Array.from({length:SIZE},()=>Array.from({length:SIZE},()=>new Set()));
-  applyImportedGameState('谜题导入成功（81字符格式）');
+  const importedPuzzle=Array.from({length:SIZE},(_,r)=>Array.from({length:SIZE},(_,c)=>str[r*SIZE+c]==='.'?0:+str[r*SIZE+c]));
+  requestImportValidation(importedPuzzle,solvedBoard=>{
+    puzzle=importedPuzzle;
+    solution=solvedBoard;
+    userBoard=puzzle.map(r=>[...r]);
+    notesBoard=Array.from({length:SIZE},()=>Array.from({length:SIZE},()=>new Set()));
+    closeIOModal();
+    applyImportedGameState('谜题导入成功（81字符格式）');
+  });
 }
 
-function backtrackSolve(b) {
-  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
-    if(b[r][c]!==0)continue;
-    for(let n=1;n<=9;n++){if(isValid(b,r,c,n)){b[r][c]=n;if(backtrackSolve(b))return true;b[r][c]=0;}}
-    return false;
+function requestImportValidation(candidate,onSuccess){
+  const id=++importRequestId;
+  const reject=message=>{if(pendingImport?.id===id){pendingImport=null;showToast(message);}};
+  pendingImport={id,onSuccess,reject};
+  if(importWorker){
+    importWorker.postMessage({id,puzzle:candidate});
+    setTimeout(()=>{
+      if(pendingImport?.id!==id)return;
+      pendingImport=null;
+      showToast('谜题无法在即时验证预算内确认唯一性');
+      importWorker.terminate();
+      importWorker=null;
+      initImportWorker();
+    },50);
+    return;
   }
-  return true;
+  reject('导入验证不可用');
+}
+
+function initImportWorker(forceBlob=false){
+  if(!window.Worker)return;
+  if(!forceBlob){
+    try{importWorker=new Worker('solver-worker.js');}
+    catch(e){importWorker=null;}
+  }
+  if(!importWorker){
+    const source=`const S=9,B=3,v=(b,r,c,n)=>{for(let i=0;i<S;i++)if(b[r][i]===n||b[i][c]===n)return false;const R=Math.floor(r/B)*B,C=Math.floor(c/B)*B;for(let y=R;y<R+B;y++)for(let x=C;x<C+B;x++)if(b[y][x]===n)return false;return true;};self.onmessage=e=>{const{id,puzzle}=e.data,b=puzzle.map(r=>[...r]);let count=0,first=null;for(let r=0;r<S;r++)for(let c=0;c<S;c++){const n=b[r][c];if(!n)continue;b[r][c]=0;const ok=v(b,r,c,n);b[r][c]=n;if(!ok){self.postMessage({id,count:0});return;}}const go=()=>{if(count>=2)return;let best=null;for(let r=0;r<S;r++)for(let c=0;c<S;c++)if(!b[r][c]){const a=[];for(let n=1;n<=9;n++)if(v(b,r,c,n))a.push(n);if(!a.length)return;if(!best||a.length<best.a.length)best={r,c,a};}if(!best){count++;if(count===1)first=b.map(r=>[...r]);return;}for(const n of best.a){b[best.r][best.c]=n;go();b[best.r][best.c]=0;if(count>=2)return;}};go();self.postMessage({id,count,solution:first});};`;
+    try{
+      const url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));
+      importWorker=new Worker(url);
+      URL.revokeObjectURL(url);
+    }catch(error){importWorker=null;return;}
+  }
+  importWorker.onmessage=e=>{
+    const {id,count,solution}=e.data;
+    if(!pendingImport||pendingImport.id!==id)return;
+    const {onSuccess,reject}=pendingImport;
+    if(count===1){pendingImport=null;onSuccess(solution);}
+    else reject(count===0?'该谜题无解':'该谜题存在多个解，无法导入');
+  };
+  importWorker.onerror=()=>{
+    importWorker=null;
+    if(pendingImport)pendingImport.reject('导入验证不可用');
+    initImportWorker(true);
+  };
+}
+
+function solveImportedPuzzle(puzzle) {
+  const board=puzzle.map(row=>[...row]);
+  const MAX_SEARCH_NODES=10000;
+  const MAX_SEARCH_MS=4;
+  const startedAt=performance.now();
+  let count=0,firstSolution=null,nodes=0,truncated=false;
+
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+    const value=board[r][c];
+    if(value===0)continue;
+    board[r][c]=0;
+    const valid=isValid(board,r,c,value);
+    board[r][c]=value;
+    if(!valid)return {count:0,solution:null};
+  }
+
+  const search=()=>{
+    if(count>=2||truncated)return;
+    if(nodes++>=MAX_SEARCH_NODES||((nodes&63)===0&&performance.now()-startedAt>=MAX_SEARCH_MS)){truncated=true;return;}
+    let best=null;
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+      if(board[r][c]!==0)continue;
+      const candidates=[];
+      for(let n=1;n<=9;n++)if(isValid(board,r,c,n))candidates.push(n);
+      if(candidates.length===0)return;
+      if(!best||candidates.length<best.candidates.length){
+        best={r,c,candidates};
+        if(candidates.length===1)break;
+      }
+    }
+    if(!best){
+      count++;
+      if(count===1)firstSolution=board.map(row=>[...row]);
+      return;
+    }
+    for(const n of best.candidates){
+      board[best.r][best.c]=n;
+      search();
+      board[best.r][best.c]=0;
+      if(count>=2||truncated)return;
+    }
+  };
+
+  search();
+  return {count:truncated?-1:count,solution:firstSolution};
 }
 
 function showToast(msg) {
@@ -901,6 +1005,7 @@ renderActionButtons();
 renderNumColumn();
 bindTopControls();
 initColorPicker();
+initImportWorker();
 if(!loadProgress()){
   newGame();
 } else {
@@ -909,6 +1014,6 @@ if(!loadProgress()){
   gameWon=false; selectedCell=null; multiSelected=new Set();
   bivalueMode=false; colorMarkMode=false; notesMode=false; activeColNum=0;
   updateCellHintBtn();
-  resetTimer(); startTimer();
+  startTimer();
   renderBoard(); updateHearts(); updateStats(); updateNumColUI();  refreshHistory();
 }

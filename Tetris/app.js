@@ -85,6 +85,8 @@ let lastRotate=false;
 let inputMode='wasd';
 let clearAnim=null;
 let lockInProgress=false;
+let animationFrameId=null;
+let gameRunId=0;
 const LOCK_DELAY=500,MAX_LOCK_RESETS=15;
 const SOFT_DROP_HOLD_MS=140;
 const CLEAR_WAVE_STEP_MS=10;
@@ -164,7 +166,20 @@ function tryRotateCCW(){
 }
 
 function tryRotate180(){
-  return tryRotateCW()&&tryRotateCW();
+  const previous={
+    rot:current.rot,x:current.x,y:current.y,matrix:current.matrix,
+    lastRotate,grounded,lockTimer,lockResets
+  };
+  if(tryRotateCW()&&tryRotateCW())return true;
+  current.rot=previous.rot;
+  current.x=previous.x;
+  current.y=previous.y;
+  current.matrix=previous.matrix;
+  lastRotate=previous.lastRotate;
+  grounded=previous.grounded;
+  lockTimer=previous.lockTimer;
+  lockResets=previous.lockResets;
+  return false;
 }
 
 function isTSpin(){
@@ -253,9 +268,11 @@ function clearLines(){
 async function lockPiece(){
   if(lockInProgress)return;
   lockInProgress=true;
+  const runId=gameRunId;
 
   merge(current);
   await clearLines();
+  if(runId!==gameRunId)return;
   holdLocked=false;
   softDrop=false;
   grounded=false;lockTimer=0;lockResets=0;
@@ -264,7 +281,7 @@ async function lockPiece(){
   if(downPressed)downBlocked=true;
   if(collide(current)){gameOver=true;showGameOver();}
 
-  lockInProgress=false;
+  if(runId===gameRunId)lockInProgress=false;
 }
 
 function stepGravity(){
@@ -390,8 +407,17 @@ function showGameOver(){
   overlay.classList.add('show');
 }
 
-function update(time=0){
-  if(gameOver||paused)return;
+function scheduleUpdate(){
+  if(animationFrameId!==null)return;
+  const runId=gameRunId;
+  animationFrameId=requestAnimationFrame(time=>{
+    animationFrameId=null;
+    update(time,runId);
+  });
+}
+
+function update(time=0,runId=gameRunId){
+  if(runId!==gameRunId||gameOver||paused)return;
   const delta=time-lastTime; lastTime=time;
 
   if(!clearAnim&&!lockInProgress){
@@ -408,10 +434,12 @@ function update(time=0){
   }
 
   draw();
-  requestAnimationFrame(update);
+  scheduleUpdate();
 }
 
 function start(){
+  gameRunId++;
+  if(animationFrameId!==null){cancelAnimationFrame(animationFrameId);animationFrameId=null;}
   resetGrid();
   score=0;lines=0;level=1;dropInterval=800;gameOver=false;paused=false;
   holdPiece=null;holdLocked=false;queue=[];ensureQueue(3);
@@ -422,7 +450,7 @@ function start(){
   updateHUD();drawNext();drawHold();overlay.classList.remove('show');
   lastTime=performance.now();dropCounter=0;
   canvas.focus();
-  requestAnimationFrame(update);
+  scheduleUpdate();
 }
 
 function updateModeUI(){
@@ -519,9 +547,9 @@ canvas.addEventListener('pointerdown',()=>canvas.focus());
 window.addEventListener('blur',()=>{paused=true;softDrop=false;clearTimeout(downTimer);downTimer=null;downPressed=false;});
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){paused=true;softDrop=false;clearTimeout(downTimer);downTimer=null;downPressed=false;}
-  else if(!gameOver){paused=false;lastTime=performance.now();requestAnimationFrame(update);}
+  else if(!gameOver){paused=false;lastTime=performance.now();scheduleUpdate();}
 });
-window.addEventListener('focus',()=>{if(!document.hidden&&!gameOver){paused=false;lastTime=performance.now();requestAnimationFrame(update);}});
+window.addEventListener('focus',()=>{if(!document.hidden&&!gameOver){paused=false;lastTime=performance.now();scheduleUpdate();}});
 
 document.getElementById('new-game').addEventListener('click',start);
 document.getElementById('restart-btn').addEventListener('click',start);

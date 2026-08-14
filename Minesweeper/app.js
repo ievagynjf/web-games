@@ -73,56 +73,6 @@ function randomMineMap(safeR,safeC){
   return mineMap;
 }
 
-function canSolveWithoutGuess(mineMap,safeR,safeC){
-  const nums=calcNums(mineMap);
-  const open=Array.from({length:mode.rows},()=>Array(mode.cols).fill(false));
-  const flag=Array.from({length:mode.rows},()=>Array(mode.cols).fill(false));
-
-  const flood=(sr,sc)=>{
-    const q=[[sr,sc]],seen=new Set([idxKey(sr,sc)]);
-    while(q.length){
-      const [r,c]=q.shift();
-      if(open[r][c]||flag[r][c])continue;
-      if(mineMap[r][c])return false;
-      open[r][c]=true;
-      if(nums[r][c]!==0)continue;
-      for(const [nr,nc] of neighbors(r,c)){
-        const k=idxKey(nr,nc);
-        if(!seen.has(k)&&!mineMap[nr][nc]){seen.add(k);q.push([nr,nc]);}
-      }
-    }
-    return true;
-  };
-
-  if(!flood(safeR,safeC))return false;
-  let progress=true,steps=0;
-  while(progress&&steps++<3000){
-    progress=false;
-    for(let r=0;r<mode.rows;r++)for(let c=0;c<mode.cols;c++){
-      if(!open[r][c]||nums[r][c]===0)continue;
-      const ns=neighbors(r,c),hidden=[];
-      let flags=0;
-      for(const [nr,nc] of ns){
-        if(flag[nr][nc])flags++;
-        else if(!open[nr][nc])hidden.push([nr,nc]);
-      }
-      if(!hidden.length)continue;
-      if(flags===nums[r][c]){
-        for(const [nr,nc] of hidden){if(!open[nr][nc]){if(!flood(nr,nc))return false;progress=true;}}
-      }else if(flags+hidden.length===nums[r][c]){
-        for(const [nr,nc] of hidden){if(!flag[nr][nc]){flag[nr][nc]=true;progress=true;}}
-      }
-    }
-  }
-
-  let opened=0;
-  for(let r=0;r<mode.rows;r++)for(let c=0;c<mode.cols;c++){
-    if(!mineMap[r][c]&&!open[r][c])return false;
-    if(open[r][c]&&!mineMap[r][c])opened++;
-  }
-  return opened<(mode.rows*mode.cols-mode.mines);
-}
-
 function setMineMapToBoard(mineMap){
   const nums=calcNums(mineMap);
   for(let r=0;r<mode.rows;r++)for(let c=0;c<mode.cols;c++){
@@ -165,6 +115,116 @@ function solveState(mineMap,safeR,safeC){
 
   if(!flood(safeR,safeC))return {solved:false,frontier:[]};
 
+  const applySubsetDifference=(subset,superset)=>{
+    if(subset.cells.length>=superset.cells.length)return false;
+    const subsetKeys=new Set(subset.cells.map(([r,c])=>idxKey(r,c)));
+    for(const [r,c] of subset.cells)if(!superset.keys.has(idxKey(r,c)))return false;
+
+    const diff=superset.cells.filter(([r,c])=>!subsetKeys.has(idxKey(r,c)));
+    const mineCount=superset.remaining-subset.remaining;
+    if(mineCount<0||mineCount>diff.length)return false;
+
+    let changed=false;
+    if(mineCount===0){
+      for(const [r,c] of diff){
+        if(!open[r][c]&&!flag[r][c]){
+          if(!flood(r,c))return false;
+          changed=true;
+        }
+      }
+    }else if(mineCount===diff.length){
+      for(const [r,c] of diff){
+        if(!flag[r][c]){flag[r][c]=true;changed=true;}
+      }
+    }
+    return changed;
+  };
+
+  const applyExactFrontierInference=(constraints)=>{
+    const cellToConstraints=new Map();
+    const coords=new Map();
+    constraints.forEach((constraint,index)=>{
+      constraint.cells.forEach(([r,c])=>{
+        const key=idxKey(r,c);
+        coords.set(key,[r,c]);
+        if(!cellToConstraints.has(key))cellToConstraints.set(key,[]);
+        cellToConstraints.get(key).push(index);
+      });
+    });
+
+    const visited=new Set();
+    const MAX_COMPONENT_CELLS=14;
+    const MAX_SEARCH_NODES=30000;
+    for(let seed=0;seed<constraints.length;seed++){
+      if(visited.has(seed))continue;
+      const queue=[seed],component=[],cellKeys=new Set();
+      visited.add(seed);
+      while(queue.length){
+        const index=queue.pop();
+        component.push(index);
+        for(const [r,c] of constraints[index].cells){
+          const key=idxKey(r,c);
+          cellKeys.add(key);
+          for(const next of cellToConstraints.get(key)){
+            if(!visited.has(next)){visited.add(next);queue.push(next);}
+          }
+        }
+      }
+
+      if(cellKeys.size>MAX_COMPONENT_CELLS)continue;
+      const keys=[...cellKeys];
+      const variableIndex=new Map(keys.map((key,index)=>[key,index]));
+      const localConstraints=component.map(index=>({
+        variables:constraints[index].cells.map(([r,c])=>variableIndex.get(idxKey(r,c))),
+        remaining:constraints[index].remaining
+      }));
+      const variableConstraints=Array.from({length:keys.length},()=>[]);
+      localConstraints.forEach((constraint,index)=>constraint.variables.forEach(variable=>variableConstraints[variable].push(index)));
+
+      const values=Array(keys.length).fill(-1);
+      const assignedMines=Array(localConstraints.length).fill(0);
+      const unassigned=localConstraints.map(constraint=>constraint.variables.length);
+      const order=Array.from({length:keys.length},(_,index)=>index).sort((a,b)=>variableConstraints[b].length-variableConstraints[a].length);
+      const mineTotals=Array(keys.length).fill(0);
+      let solutions=0,nodes=0,truncated=false;
+
+      const search=(depth)=>{
+        if(nodes++>=MAX_SEARCH_NODES){truncated=true;return;}
+        if(depth===order.length){
+          solutions++;
+          for(let i=0;i<values.length;i++)mineTotals[i]+=values[i];
+          return;
+        }
+        const variable=order[depth];
+        for(let value=0;value<=1&&!truncated;value++){
+          values[variable]=value;
+          let valid=true;
+          for(const constraintIndex of variableConstraints[variable]){
+            assignedMines[constraintIndex]+=value;
+            unassigned[constraintIndex]--;
+            const constraint=localConstraints[constraintIndex];
+            if(assignedMines[constraintIndex]>constraint.remaining||assignedMines[constraintIndex]+unassigned[constraintIndex]<constraint.remaining)valid=false;
+          }
+          if(valid)search(depth+1);
+          for(const constraintIndex of variableConstraints[variable]){
+            assignedMines[constraintIndex]-=value;
+            unassigned[constraintIndex]++;
+          }
+          values[variable]=-1;
+        }
+      };
+
+      search(0);
+      if(truncated||solutions===0)continue;
+      for(let i=0;i<keys.length;i++){
+        const [r,c]=coords.get(keys[i]);
+        if(mineTotals[i]===0){if(!flood(r,c))return false;return true;}
+        if(mineTotals[i]===solutions){flag[r][c]=true;return true;}
+      }
+    }
+    return false;
+  };
+
   let progress=true,steps=0;
   while(progress&&steps++<3500){
     progress=false;
@@ -182,6 +242,30 @@ function solveState(mineMap,safeR,safeC){
       }else if(flags+hidden.length===nums[r][c]){
         for(const [nr,nc] of hidden){ if(!flag[nr][nc]){ flag[nr][nc]=true; progress=true; } }
       }
+    }
+
+    if(!progress){
+      const constraints=[];
+      for(let r=0;r<mode.rows;r++)for(let c=0;c<mode.cols;c++){
+        if(!open[r][c]||nums[r][c]===0)continue;
+        const cells=[];
+        let flags=0;
+        for(const [nr,nc] of neighbors(r,c)){
+          if(flag[nr][nc])flags++;
+          else if(!open[nr][nc])cells.push([nr,nc]);
+        }
+        const remaining=nums[r][c]-flags;
+        if(cells.length&&remaining>=0&&remaining<=cells.length){
+          constraints.push({cells,keys:new Set(cells.map(([nr,nc])=>idxKey(nr,nc))),remaining});
+        }
+      }
+
+      for(let i=0;i<constraints.length&&!progress;i++){
+        for(let j=i+1;j<constraints.length&&!progress;j++){
+          progress=applySubsetDifference(constraints[i],constraints[j])||applySubsetDifference(constraints[j],constraints[i]);
+        }
+      }
+      if(!progress)progress=applyExactFrontierInference(constraints);
     }
   }
 
@@ -467,7 +551,6 @@ function chordOpen(r,c){
   }
   if(changed){
     waveOpenEffect(openedAll,[r,c],()=>{autoFlagCascade();checkWin();});
-    checkWin();
   }
   return changed;
 }
@@ -481,7 +564,6 @@ function handleCellClick(r,c){
   if(d.mine)return handleLose();
   const opened=floodOpen(r,c);
   waveOpenEffect(opened,[r,c],()=>{autoFlagCascade();checkWin();});
-  checkWin();
 }
 
 function toggleFlag(r,c){

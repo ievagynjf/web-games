@@ -11,6 +11,8 @@ const BRICK_COLS=W/CELL; // 40
 
 let lives=3,gameOver=false;
 let last=0;
+let animationFrameId=null;
+let gameRunId=0;
 
 const paddle={x:W/2-54,y:H-26,w:108,h:6,speed:720,dx:0,lastX:W/2-54};
 let balls=[];
@@ -679,6 +681,8 @@ function makeBricks(){
 }
 
 function start(){
+  gameRunId++;
+  if(animationFrameId!==null){cancelAnimationFrame(animationFrameId);animationFrameId=null;}
   lives=3;gameOver=false;
   paddle.x=W/2-paddle.w/2;paddle.dx=0;
   buildCorridor();
@@ -689,7 +693,7 @@ function start(){
   updateHUD();
   last=performance.now();
   canvas.focus();
-  requestAnimationFrame(loop);
+  scheduleLoop();
 }
 
 function end(title,msg){
@@ -749,21 +753,19 @@ function spawnPlus2FromPaddle(){
   balls.push({x:paddle.x+paddle.w*0.7,y,r:4,vx:145,vy:-speed,stuck:false});
 }
 
-function spawnRadialFromBall(source,count){
-  if(!source||count<=0)return;
+function spawnTwinFromBall(source){
+  if(!source)return;
   const speed=Math.max(340,Math.hypot(source.vx,source.vy));
   const base=Math.atan2(source.vy,source.vx);
-  for(let i=0;i<count;i++){
-    const angle=base+(Math.PI*2*i)/count;
-    balls.push({
-      x:source.x,
-      y:source.y,
-      r:source.r,
-      vx:Math.cos(angle)*speed,
-      vy:Math.sin(angle)*speed,
-      stuck:false
-    });
-  }
+  const angle=base+(Math.random()<0.5?-0.42:0.42);
+  balls.push({
+    x:source.x,
+    y:source.y,
+    r:source.r,
+    vx:Math.cos(angle)*speed,
+    vy:Math.sin(angle)*speed,
+    stuck:false
+  });
 }
 
 function applyDrop(kind){
@@ -777,7 +779,7 @@ function applyDrop(kind){
 
   if(kind==='*2'){
     const snapshot=[...moving];
-    for(const s of snapshot)spawnRadialFromBall(s,4);
+    for(const s of snapshot)spawnTwinFromBall(s);
   }
 }
 
@@ -924,13 +926,22 @@ function draw(){
 
 }
 
-function loop(t=0){
-  if(gameOver)return;
+function scheduleLoop(){
+  if(animationFrameId!==null)return;
+  const runId=gameRunId;
+  animationFrameId=requestAnimationFrame(t=>{
+    animationFrameId=null;
+    loop(t,runId);
+  });
+}
+
+function loop(t=0,runId=gameRunId){
+  if(runId!==gameRunId||gameOver)return;
   const dt=Math.min(0.033,(t-last)/1000||0);
   last=t;
   update(dt);
   draw();
-  requestAnimationFrame(loop);
+  scheduleLoop();
 }
 
 let controlMode='pointer'; // 'keyboard' | 'pointer'

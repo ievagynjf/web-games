@@ -9,3 +9,7 @@ Sudoku/**/*.pyc
 # Non-game generation/tooling assets in Sudoku
 Sudoku/sudoku_generator/
 Sudoku/sudoku-exchange-puzzle-bank-master/
+
+# Downloaded third-party offline validators and regenerable audit reports
+Sudoku/.tools/
+Sudoku/*_difficulty_audit*.json
