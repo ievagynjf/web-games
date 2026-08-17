@@ -482,6 +482,7 @@ function updateCellHintBtn(){
 
 function initRoundState(){
   notesBoard=Array.from({length:9},()=>Array.from({length:9},()=>new Set()));
+  noteColors=Array.from({length:9},()=>Array.from({length:9},()=>({})));
   hintCells.clear();
   errorCount=0;
   hintCount=0;
@@ -600,7 +601,48 @@ function loadBankChunk(diff,index){
   });
 }
 
+const bankChunkStates=new Map();
+let bankWarmupScheduled=false;
 let normalGameRequest=0;
+
+function getBankChunkState(diff){
+  if(!bankChunkStates.has(diff))bankChunkStates.set(diff,{current:null,next:null,loading:null,loadedIndexes:new Set()});
+  return bankChunkStates.get(diff);
+}
+
+function pickUnloadedBankIndex(state){
+  const available=[];
+  for(let index=0;index<SUDOKU_BANK_CHUNK_COUNT;index++)if(!state.loadedIndexes.has(index))available.push(index);
+  return available.length?available[~~(Math.random()*available.length)]:~~(Math.random()*SUDOKU_BANK_CHUNK_COUNT);
+}
+
+function prefetchBankChunk(diff){
+  const state=getBankChunkState(diff);
+  if(state.next)return Promise.resolve(state.next);
+  if(state.loading)return state.loading;
+  const index=pickUnloadedBankIndex(state);
+  state.loading=loadBankChunk(diff,index).then(bank=>{
+    if(!bank?.length)throw new Error('empty bank chunk');
+    state.loadedIndexes.add(index);
+    state.next=bank;
+    return bank;
+  }).finally(()=>{state.loading=null;});
+  return state.loading;
+}
+
+function takeReadyBankChunk(diff){
+  const state=getBankChunkState(diff);
+  if(state.next){state.current=state.next;state.next=null;}
+  return state.current;
+}
+
+function scheduleBankWarmup(){
+  if(bankWarmupScheduled)return;
+  bankWarmupScheduled=true;
+  const warm=()=>DIFF_OPTIONS.forEach(({value})=>prefetchBankChunk(value).catch(()=>{}));
+  if('requestIdleCallback'in window)requestIdleCallback(warm,{timeout:1200});
+  else setTimeout(warm,0);
+}
 
 function finishNewGame(){
   userBoard=puzzle.map(r=>[...r]);
@@ -627,6 +669,8 @@ function finishNewGame(){
   restartRoundAndRender();
   refreshHistory();
   scheduleSave();
+  prefetchBankChunk(difficulty).catch(()=>{});
+  scheduleBankWarmup();
 }
 
 function newGame(){
@@ -637,14 +681,19 @@ function newGame(){
     finishNewGame();
     return;
   }
-  const chunkIndex=~~(Math.random()*SUDOKU_BANK_CHUNK_COUNT);
-  loadBankChunk(difficulty,chunkIndex).then(bank=>{
+  const applyBank=bank=>{
     if(request!==normalGameRequest||!bank?.length)return;
     const normal=buildNormalPuzzleFromBank(bank);
     puzzle=normal.puzzle;
     solution=normal.solution;
     finishNewGame();
-  }).catch(()=>showToast('题库加载失败，请重试'));
+  };
+  const readyBank=takeReadyBankChunk(difficulty);
+  if(readyBank){
+    applyBank(readyBank);
+    return;
+  }
+  prefetchBankChunk(difficulty).then(()=>applyBank(takeReadyBankChunk(difficulty))).catch(()=>showToast('题库加载失败，请重试'));
 }
 
 /* UI */
