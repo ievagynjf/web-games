@@ -13,6 +13,7 @@ let undoStack=[];
 let currentMarkColor='#ff6b6b';
 let noteColors=Array.from({length:9},()=>Array.from({length:9},()=>({})));
 let importWorker=null,importRequestId=0,pendingImport=null;
+let saveTimer=null;
 const CS=65;
 const SUDOKU_BANK_CHUNK_COUNT=25;
 const MODE_WEIGHT={normal:1,killer:1.6};
@@ -46,7 +47,10 @@ const cellEls=Array.from({length:SIZE},()=>Array(SIZE).fill(null));
 
 function keyOf(r,c){return `${r},${c}`;}
 function boxStart(i){return Math.floor(i/BOX)*BOX;}
-function scheduleSave(){setTimeout(saveProgress,0);}
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{saveTimer=null;saveProgress();},0);
+}
 function forEachPeer(r,c,fn){
   for(let i=0;i<SIZE;i++){ if(i!==c)fn(r,i); if(i!==r)fn(i,c); }
   const br=boxStart(r),bc=boxStart(c);
@@ -439,7 +443,7 @@ function inputNum(n){
   const prevVal=userBoard[r][c];
   notesBoard[r][c].clear();noteColors[r][c]={};userBoard[r][c]=n;hintCells.delete(k);
   clearPeersNotes(r,c,n);
-  if(n!==solution[r][c]&&prevVal!==n){errorCount++;updateHearts();updateStats();const cell=document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);if(cell){cell.classList.add('anim-shake');setTimeout(()=>cell.classList.remove('anim-shake'),350);}if(errorCount>=3){gameWon=true;stopTimer();refreshAfterBoardChange();setTimeout(()=>showResultOverlay('lose','错误次数已达三次，挑战失败'),400);return;}}
+  if(n!==solution[r][c]&&prevVal!==n){errorCount++;updateHearts();updateStats();const cell=document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);if(cell){cell.classList.add('anim-shake');setTimeout(()=>cell.classList.remove('anim-shake'),350);}if(errorCount>=3){gameWon=true;stopTimer();clearProgress();refreshAfterBoardChange();setTimeout(()=>showResultOverlay('lose','错误次数已达三次，挑战失败'),400);return;}}
   refreshAfterBoardChange({stats:true});
   if(n===solution[r][c])checkDigitComplete(n);
   checkWin();
@@ -541,7 +545,7 @@ function showResultOverlay(type,message){
 function checkWin(){
   for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(userBoard[r][c]!==solution[r][c])return;
   if(gameMode==='killer')for(const cage of cages)if(cage.cells.reduce((s,[r,c])=>s+userBoard[r][c],0)!==cage.sum)return;
-  gameWon=true;stopTimer();
+  gameWon=true;stopTimer();clearProgress();
   const score=calcScore(secondsElapsed,errorCount,hintCount,difficulty,gameMode);recordWin(score);
   showResultOverlay('win',`难度: ${(DIFF_META[difficulty]?.label)||difficulty} · 用时: ${fmtTime(secondsElapsed)} · 错误: ${errorCount} · 得分: ${score}`);
 }
@@ -795,6 +799,12 @@ document.addEventListener('keyup',e=>{if(e.key==='Control'){ctrlHeld=false;isDra
 
 const SAVE_KEY = 'sudoku_autosave_v2';
 
+function clearProgress(){
+  clearTimeout(saveTimer);
+  saveTimer=null;
+  try{localStorage.removeItem(SAVE_KEY);}catch(e){}
+}
+
 function encodeB1() {
   const vals = [];
   for(let r=0;r<9;r++) for(let c=0;c<9;c++) {
@@ -845,6 +855,7 @@ function decodeB1(str) {
 }
 
 function saveProgress() {
+  if(gameWon){clearProgress();return;}
   try {
     const envelope = {
       v: 2, gameMode, difficulty,
@@ -868,13 +879,16 @@ function loadProgress() {
     if(!s.b1||!s.sol) return false;
     const decoded = decodeB1(s.b1);
     if(!decoded) return false;
+    const storedSolution=String(s.sol);
+    const completed=storedSolution.length===81&&decoded.newUser.every((row,r)=>row.every((value,c)=>value===+storedSolution[r*9+c]));
+    if((s.errorCount||0)>=3||completed){localStorage.removeItem(SAVE_KEY);return false;}
     gameMode = s.gameMode||'normal';
     difficulty = s.difficulty||'beginner';
     syncModeDiffUI();
     puzzle = decoded.newPuzzle;
     userBoard = decoded.newUser;
     notesBoard = decoded.newNotes;
-    solution=[]; for(let r=0;r<9;r++){const row=[];for(let c=0;c<9;c++)row.push(+s.sol[r*9+c]);solution.push(row);}
+    solution=[]; for(let r=0;r<9;r++){const row=[];for(let c=0;c<9;c++)row.push(+storedSolution[r*9+c]);solution.push(row);}
     noteColors=Array.isArray(s.noteColors)&&s.noteColors.length===9&&s.noteColors.every(row=>Array.isArray(row)&&row.length===9)
       ? s.noteColors.map(row=>row.map(colors=>({...colors})))
       : Array.from({length:9},()=>Array.from({length:9},()=>({})));
